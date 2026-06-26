@@ -423,18 +423,12 @@ Three reward variants in this homework, one PPO run each:
 - **`custom:<your-module>`** (Task 8) — your own design, trying to
   resist the reward-hack patterns Tasks 6 and 7 expose.
 
-PPO with vLLM-driven rollouts is weeks of engineering to assemble from
-scratch — actor, critic, frozen reference policy for the KL term, vLLM
-rollout workers, plus the Ray orchestration tying them together. We
-use **verl** (an open-source RLHF/RL-for-LLMs trainer from Volcengine)
-as the off-the-shelf path. It runs PPO with vLLM rollouts and
-FSDP-sharded training — exactly what we need for the homework.
+We use an implementation of PPO from **verl** (an open-source RLHF/RL-for-LLMs trainer from Volcengine). It runs PPO with vLLM rollouts and
+FSDP-sharded training. For this particular model it might be an overkill (it's created for heavy, multi-GPU jobs), but why not try it? They ditched PPO from `trl` anyway.
 
 verl ships as a Docker image (`verlai/verl:vllm023.dev1`) because the
 underlying stack — vLLM, Ray, FSDP, and the right CUDA / torch /
-transformers pins — is brittle to assemble from `pip install`. The
-image is a known-working pinned environment; pulling it once gives you
-the whole stack. We mount the host's repo and the HF / torch caches
+transformers pins — is brittle to assemble from `pip install`. We mount the host's repo and the HF / torch caches
 into the container so artifacts (checkpoints, eval inputs, downloaded
 weights) survive between runs and the container reads weights from
 disk instead of going over the network.
@@ -461,8 +455,7 @@ The docker runs below bind-mount the host's `~/.cache/huggingface` and
 `~/.cache/torch` directories into the container, so verl reads Qwen
 and Detoxify from disk instead of pulling them over the container's
 network. Steps 3–6 already populated both caches as a side effect of
-every `from_pretrained` and `Detoxify(...)` call along the way — you
-don't need to do anything extra here.
+every `from_pretrained` and `Detoxify(...)` call along the way.
 
 #### Verl setup evidence — one-time
 
@@ -504,7 +497,7 @@ The same flag block carries over to Tasks 7 and 8 — only `--reward`
 and the `--out` directory change between the three runs.
 
 Output is piped through `tee` so the training log lands in
-`submissions/task6_log.txt`:
+`submissions/task6_log.txt`. Be prepared to watch very wordy logs unfurl.
 
 ```bash
 sudo docker run --rm --gpus all --ipc=host \
