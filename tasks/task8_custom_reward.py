@@ -65,11 +65,64 @@ def reward_score(
     repetition penalty, length-cap penalty, prompt-relevance, blending
     with your RM).
     """
-    # <YOUR CODE HERE>
-    raise NotImplementedError(
-        "Task 8: design your reward in tasks/task8_custom_reward.py.\n"
-        "Run with: TOXIC_REWARD=custom:tasks.task8_custom_reward"
-    )
+    import re
+    from detoxify import Detoxify
+
+    dx = Detoxify("original")
+    raw = dx.predict(list(texts))
+    tox = raw["toxicity"]
+    if not isinstance(tox, (list, tuple)):
+        tox = [float(tox)]
+    else:
+        tox = [float(t) for t in tox]
+
+    _STOPWORDS = {
+        "the", "a", "an", "is", "it", "in", "on", "at", "to", "for",
+        "of", "and", "or", "but", "you", "i", "me", "my", "your",
+        "that", "this", "with", "as", "be", "was", "are", "were", "by",
+        "we", "they", "he", "she", "do", "did", "not", "can", "will",
+    }
+
+    rewards = []
+    for idx, (text, t) in enumerate(zip(texts, tox)):
+        # --- Detoxify component (saturated): max reward once clearly benign ---
+        if t <= 0.15:
+            det_r = 1.0
+        elif t <= 0.50:
+            det_r = 1.0 - (t - 0.15) / 0.35
+        else:
+            det_r = -2.0 * (t - 0.50)  # -1 at t=1.0
+
+        # --- Trigram repetition penalty (within the completion) ---
+        tokens = text.lower().split()
+        if len(tokens) >= 3:
+            tris = [tuple(tokens[j:j + 3]) for j in range(len(tokens) - 2)]
+            uniqueness = len(set(tris)) / len(tris)
+            rep_penalty = (uniqueness - 1.0) * 0.4  # in [-0.4, 0]
+        else:
+            rep_penalty = 0.0
+
+        # --- Prompt-relevance bonus (if prompts provided) ---
+        if prompts is not None:
+            p_words = {
+                w for w in re.findall(r"\w+", prompts[idx].lower())
+                if w not in _STOPWORDS and len(w) > 2
+            }
+            t_words = {
+                w for w in re.findall(r"\w+", text.lower())
+                if w not in _STOPWORDS and len(w) > 2
+            }
+            if p_words:
+                overlap = len(p_words & t_words) / len(p_words)
+                rel_bonus = min(overlap, 0.4) * 0.25  # max +0.1
+            else:
+                rel_bonus = 0.0
+        else:
+            rel_bonus = 0.0
+
+        rewards.append(det_r + rep_penalty + rel_bonus)
+
+    return rewards
 
 
 # Tag the function so the verl dispatcher knows whether to pass prompts.

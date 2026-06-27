@@ -181,10 +181,18 @@ def train(
             #   - ``loss``      — scalar tensor, fed into ``.backward()`` below
             #   - ``chosen_r``  — shape ``(batch/2,)``, for the log line further down
             #   - ``rejected_r``— shape ``(batch/2,)``, same
-            # <YOUR CODE HERE>
-            raise NotImplementedError(
-                "Task 2 (part 2): wire dpo_loss into the trainer"
+            pol_logps = per_example_logps(pol_out.logits, labels)
+            ref_logps = per_example_logps(ref_out.logits, labels)
+            pol_chosen_logps  = pol_logps[0::2]
+            pol_rejected_logps = pol_logps[1::2]
+            ref_chosen_logps  = ref_logps[0::2]
+            ref_rejected_logps = ref_logps[1::2]
+            losses, chosen_r, rejected_r = dpo_loss(
+                pol_chosen_logps, pol_rejected_logps,
+                ref_chosen_logps, ref_rejected_logps,
+                beta=beta,
             )
+            loss = losses.mean()
             # ==================================================================
             (loss / grad_accum).backward()
             micro += 1

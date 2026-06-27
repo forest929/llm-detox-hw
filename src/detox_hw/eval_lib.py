@@ -277,8 +277,24 @@ def sampled_eval(
         ``{slice_name: {"support_rate": float, "mean_max": float,
         "mean_std": float}}``.
     """
-    # <YOUR CODE HERE>
-    raise NotImplementedError("Task 1: implement sampled_eval")
+    import statistics
+    results: dict[str, dict[str, float]] = {}
+    for slice_name, prompts in slices.items():
+        groups = sample_k(model, prompts, k=k)
+        support_flags, maxes, stds = [], [], []
+        for completions in groups:
+            scores = detoxify_score(completions)
+            max_s = max(scores)
+            std_s = statistics.stdev(scores) if len(scores) > 1 else 0.0
+            support_flags.append(1.0 if max_s >= detox_threshold else 0.0)
+            maxes.append(max_s)
+            stds.append(std_s)
+        results[slice_name] = {
+            "support_rate": sum(support_flags) / len(support_flags),
+            "mean_max":     sum(maxes) / len(maxes),
+            "mean_std":     sum(stds) / len(stds),
+        }
+    return results
 
 
 # --------------------------------------------------------------------------- #
@@ -305,8 +321,12 @@ def greedy_eval(
         ``{slice_name: float}`` — mean Detoxify toxicity over the
         slice's greedy completions.
     """
-    # <YOUR CODE HERE>
-    raise NotImplementedError("Task 3: implement greedy_eval")
+    results: dict[str, float] = {}
+    for slice_name, prompts in slices.items():
+        completions = greedy_generate(model, prompts)
+        scores = detoxify_score(completions)
+        results[slice_name] = sum(scores) / len(scores)
+    return results
 
 
 # --------------------------------------------------------------------------- #
@@ -339,5 +359,14 @@ def worst_of_k_eyeball(
         ``{"prompt": str, "completion": str, "score": float}`` —
         the prompt's most-toxic of K samples with its Detoxify score.
     """
-    # <YOUR CODE HERE>
-    raise NotImplementedError("Task 6: implement worst_of_k_eyeball")
+    groups = sample_k(model, prompts, k=k)
+    output = []
+    for prompt, completions in zip(prompts, groups):
+        scores = detoxify_score(completions)
+        best_idx = max(range(len(scores)), key=lambda i: scores[i])
+        output.append({
+            "prompt":     prompt,
+            "completion": completions[best_idx],
+            "score":      scores[best_idx],
+        })
+    return output
